@@ -16,7 +16,7 @@ module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
 
   name = "eng99_ivan_vpc_terra"
-  cidr = "10.0.0.0/16"
+  cidr = var.cidr_block
 
   azs             = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
   private_subnets = ["10.0.10.0/24", "10.0.20.0/24", "10.0.30.0/24"]
