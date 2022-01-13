@@ -1,71 +1,171 @@
+
+# To create and destroy infrastructure at will
+
+
+#Note find if this is compiled or interpreted
 # Point to the cloud provider
 provider "aws" {
 	region = "eu-west-1"
 }
 
-resource "aws_instance" "app_instance" {
-	ami = var.app_ami_id
-	instance_type = "t2.micro"
-	associate_public_ip_address = true
-	tags = {
-	    Name = "eng99_ivan_terrafrom_app"
-	}
-	key_name = "eng99"
+
+resource "aws_vpc" "Ivan_terra_vpc" {
+    cidr_block = var.cidr_block
+    tags = {
+      Name = "Ivan_terra_vpc"
+    }
 }
-module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
 
-  name = var.vpc_name 
-  cidr = var.cidr_block
-
-  azs             = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
-  private_subnets = ["10.0.10.0/24", "10.0.20.0/24", "10.0.30.0/24"]
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
-
-  enable_nat_gateway = false 
-  enable_vpn_gateway = false
-
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.Ivan_terra_vpc.id
   tags = {
-    Terraform = "true"
-    Environment = "dev"
+    Name : "ivan_terra_ig"
   }
+}
+
+resource "aws_subnet" "Public" {
+  vpc_id     = aws_vpc.Ivan_terra_vpc.id
+  cidr_block = var.aws_public_cidr
+  tags = {
+    Name = "public_sub_terra"
+  }
+}
+
+
+resource "aws_subnet" "Private" {
+  vpc_id     = aws_vpc.Ivan_terra_vpc.id
+  cidr_block = var.aws_private_cidr
+  tags = {
+    Name = "private_sub_terra"
+  }
+}
+
+resource "aws_route_table" "Public_RT" {
+  vpc_id = aws_vpc.Ivan_terra_vpc.id
+  route {
+    cidr_block = var.aws_open_port
+    gateway_id = aws_internet_gateway.igw.id
+  }
+  tags = {
+    Name = var.public_route_table
+  }
+}
+
+resource "aws_route_table" "Private_RT" {
+  vpc_id = aws_vpc.Ivan_terra_vpc.id
+  route {
+    cidr_block = var.aws_open_port
+    gateway_id = aws_internet_gateway.igw.id
+  }
+  tags = {
+    Name = var.private_route_table
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.Public.id
+  route_table_id = aws_route_table.Public_RT.id
+}
+
+# Associating Private Subnet to routing table
+resource "aws_route_table_association" "private" {
+  subnet_id = aws_subnet.Private.id
+  route_table_id = aws_route_table.Private_RT.id
+}
+
+resource "aws_security_group" "public" {
+  name        = "allow_public_access"
+  description = "allow_public_access"
+  vpc_id      = aws_vpc.Ivan_terra_vpc.id
+}
+
+# Security group Private DB
+resource "aws_security_group" "private" {
+  name = "db_sg"
+  description = "db_sg"
+  vpc_id = aws_vpc.Ivan_terra_vpc.id
+}
+
+resource "aws_security_group_rule" "app_ssh" {
+  type              = "ingress"
+  protocol          = "tcp"
+  from_port         = "22"
+  to_port           = "22"
+  cidr_blocks       = [var.aws_open_port]
+  security_group_id = aws_security_group.public.id
+}
+
+resource "aws_security_group_rule" "app_outbound" {
+  type = "egress"
+  protocol = "-1"
+  from_port = "0"
+  to_port = "0"
+  cidr_blocks = [var.aws_open_port]
+  security_group_id = aws_security_group.public.id
+}
+
+resource "aws_security_group_rule" "db" {
+  type = "ingress"
+  protocol = "tcp"
+  from_port = "0"
+  to_port = "27017"
+  cidr_blocks = [var.aws_public_cidr]
+  security_group_id = aws_security_group.private.id
+}
+
+resource "aws_security_group_rule" "db_outbound" {
+  type = "egress"
+  protocol = "-1"
+  from_port = "0"
+  to_port = "0"
+  cidr_blocks = [var.aws_open_port]
+  security_group_id = aws_security_group.private.id
+}
+
+resource "aws_instance" "controller_instance" {
+  ami = var.app_ami_id
+  subnet_id = aws_subnet.Public.id
+  instance_type = var.aws_instance_type
+  security_groups = [aws_security_group.public.id]
+  associate_public_ip_address = true
+  tags = {
+    Name = var.controller_name
+  }
+  key_name = var.aws_key_name
+}
+
+
+# App Instance
+resource "aws_instance" "app_instance" {
+  # AMI id for 18.04LTS
+  ami             = var.app_ami_id
+  subnet_id       = aws_subnet.Public.id
+  instance_type   = var.aws_instance_type
+  security_groups = [aws_security_group.public.id]
+  associate_public_ip_address = true
+  tags = {
+    Name = var.name
+  }
+  # Allows terraform to use eng99.pem to connect to instance
+  # Looks in .ssh folder
+  key_name = var.aws_key_name
+}
+
+# DB Instance
+resource "aws_instance" "db_instance" {
+  ami = var.app_ami_id
+  subnet_id = aws_subnet.Private.id
+  instance_type = var.aws_instance_type
+  security_groups = [aws_security_group.private.id]
+  associate_public_ip_address = true
+  tags = {
+    Name = var.db_name
+  }
+  key_name = var.aws_key_name
 }
 
 # to run this use terraform plan
 # what plan does is a syntax check much like a --syntax-check
-# terraform apply 
-resource "aws_security_group" "allow_tls" {
-  name        = "eng99_ivan_terraform"
-  description = "Allow TLS inbound traffic"
-  vpc_id      = var.vpc_id
+# terraform apply
 
-  ingress {
-    description      = "access the app from anywhere world"
-    from_port        = 3000
-    to_port          = 3000
-    protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-  ingress {
-    description      = "ssh from world"
-    from_port        = 22
-    to_port          = 22
-    protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  tags = {
-    Name = "allow_tls"
-  }
-}
 
