@@ -164,6 +164,14 @@ resource "aws_instance" "db_instance" {
   key_name = var.aws_key_name
 }
 
+# Needed to output the ip of the newly established instances
+output "app_instance_ip" {
+  value = aws_instance.app_instance.public_ip
+}
+
+output "db_instance_ip" {
+  value = aws_instance.db_instance.public_ip
+}
 # to run this use terraform plan
 # what plan does is a syntax check much like a --syntax-check
 # terraform apply

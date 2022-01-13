@@ -1,0 +1,7 @@
+
+[aws]
+ec2-instance ansible_host=3.250.140.209 ansible_user=ubuntu
+[aws]
+ec2-instance ansible_host=3.250.140.209 ansible_user=ubuntu
+
+# Removal of ansible_ssh_private_key_file=~/.ssh/eng99.pem is needed to function for jenkins

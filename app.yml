@@ -1,0 +1,43 @@
+# Installing a running a the app from my git repo
+
+- hosts: aws
+  gather_facts: true
+  become: true
+
+  tasks:
+  - name: Installing npm
+    apt: pkg=npm state=present
+    #    become_user: root
+  - name: Cloning GIT
+    git:
+      repo: https://github.com/GNUKalashnikov/starter-code.git
+      dest: /home/ubuntu/repo
+      clone: yes
+      update: yes
+  - name: Sending the new default file to nginx
+    command: cp default /etc/nginx/sites-available/default
+    become_user: root
+#  - name: Link the change
+#    command: ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+#    allow_failure: true
+  - name: Testing nginx
+    command: service nginx configtest
+    become_user: root
+  - name: Restarting Nginx
+    command: service nginx restart
+    become_user: root
+  - name: env & source
+    shell: source /home/ubuntu/.bashrc && echo export DB_HOST=mongodb://192.168.56.3:27017/posts >> /home/ubuntu/.bashrc
+    args:
+      executable: /bin/bash
+  - name: installing pm2
+    command: npm install pm2 -g
+    become_user: root
+  - name: seeding
+    command: node seeds/seed.js
+    args:
+      chdir: repo/app
+  - name: starting the app
+    command: pm2 start app.js
+    args:
+      chdir: repo/app/
