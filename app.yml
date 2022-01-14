@@ -5,6 +5,8 @@
   become: true
 
   tasks:
+  - name: Installation of Nginx within the Web agent node
+    apt: pkg=nginx state=present
   - name: Installing npm
     apt: pkg=npm state=present
     #    become_user: root

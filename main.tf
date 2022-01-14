@@ -152,11 +152,12 @@ resource "aws_instance" "app_instance" {
 }
 
 # DB Instance
+# Public instance is set purely for time
 resource "aws_instance" "db_instance" {
   ami = var.app_ami_id
-  subnet_id = aws_subnet.Private.id
+  subnet_id = aws_subnet.Public.id
   instance_type = var.aws_instance_type
-  security_groups = [aws_security_group.private.id]
+  security_groups = [aws_security_group.public.id]
   associate_public_ip_address = true
   tags = {
     Name = var.db_name
